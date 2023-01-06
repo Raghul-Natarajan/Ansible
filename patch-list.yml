@@ -1,0 +1,45 @@
+---
+- name: Play-book for package download
+  hosts: all
+  become: true
+  tasks:
+   - name: Download patches for RHEl/CENTOS/AMAZON/
+     shell: |
+      yum clean all;yum update --downloadonly --downloaddir=/usr/local/patch --security | sed -n '/Dependencies\ Resolved/,$p' > /tmp/"{{ ansible_hostname }}".csv
+      ip r | grep src >> /tmp/"{{ ansible_hostname }}".csv
+     when: ansible_distribution == 'CentOS' or ansible_distribution == 'RedHat' or ansible_distribution == "Amazon" or ansible_distribution == "OracleLinux"
+
+   - name: Download patches for Ubuntu systems
+     shell: apt list --upgradable | grep security  > /tmp/"{{ ansible_hostname }}".csv;ip r | grep src >> /tmp/"{{ ansible_hostname }}".csv
+     when: ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
+
+   - name: patchlist for SUSE systems
+     shell: zypper list-patches --category security > /tmp/"{{ ansible_hostname }}".csv;ip r | grep src >> /tmp/"{{ ansible_hostname }}".csv
+     when: ansible_distribution == 'SLES' or ansible_distribution == 'SLES_SAP'
+
+   - name: Download patches for SUSE systems
+     shell: zypper patch --download-only --category security  --with-interactive -y
+     when: ansible_distribution == 'SLES' or ansible_distribution == 'SLES_SAP'
+     register: result
+     ignore_errors: yes
+     failed_when: false
+     changed_when: result.rc == 102
+
+   - name: Download securitypatches for Ubuntu systems
+     shell: apt list --upgradable | grep -e "-security" | awk -F "/" '{print $1}' | xargs apt --download-only --assume-yes install
+     when: ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
+
+   - name: Getting patchlist from various systems
+     fetch:
+      src: /tmp/{{ ansible_hostname }}.csv
+      dest: /var/lib/awx/projects/python-workbook/
+      flat: yes
+
+   - name: Storing patches in workbook
+     script:
+      cmd: /var/lib/awx/projects/python-workbook/python-excel-append.py "{{ workbook }}"
+      chdir: /var/lib/awx/projects/python-workbook/
+     delegate_to: localhost
+     register: result
+     ignore_errors: True
+     when: inventory_hostname == ansible_play_hosts_all[-1]

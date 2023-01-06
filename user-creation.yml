@@ -1,0 +1,36 @@
+---
+-
+  hosts: all
+  vars:
+
+       my_user1_pass: ""
+       user1_password: "{{ '%s' | format(my_user1_pass|string) }}"
+  tasks:
+    - name: create zrybs group
+      group:
+        name: zrybs
+        gid: 1017
+        state: present
+
+    - name: create zrybs user
+      user:
+        name: user1
+        uid:  1017
+        comment: "user1 user"
+        group: user1
+        groups: "user1"
+        shell: /bin/bash
+        home: /home/user1
+        password: "{{ user1_password|password_hash('sha512') }}"
+        state: present
+        create_home: yes
+
+
+
+    - name: add zrybs to sudoers
+      lineinfile:
+          path: /etc/sudoers
+          backup: True
+          line: zrybs ALL=(ALL)       ALL
+          firstmatch: yes
+          insertafter: "^root"
